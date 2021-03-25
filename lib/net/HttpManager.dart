@@ -2,10 +2,10 @@ import 'package:dio/dio.dart';
 
 class HttpManager {
   factory HttpManager() => _getInstance();
-  static HttpManager _instance;
+  static  HttpManager? _instance;
 
   Dio get http => _dio;
-  Dio _dio;
+  late Dio _dio;
 
   static const int _CONNECT_TIMEOUT = 15000;
   static const int _RECEIVE_TIMEOUT = 15000;

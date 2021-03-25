@@ -1,10 +1,10 @@
 class PublicArgs{
-  String action;
-  String region;
-  int timestamp;
-  String version;
-  String auth;
-  String token;
+  late String action;
+   String? region;
+  late int timestamp;
+  late String version;
+  late String auth;
+  String? token;
 
   PublicArgs(this.action,this.region,this.version,this.timestamp);
 
@@ -17,10 +17,10 @@ class PublicArgs{
     };
 
     if(region!=null) {
-      map["X-TC-Region"]=region;
+      map["X-TC-Region"]=region!;
     }
     if(token!=null) {
-      map["X-TC-Token"]=token;
+      map["X-TC-Token"]=token!;
     }
     return map;
   }

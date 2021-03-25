@@ -1,38 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:face_transfer/data/ResponseResult.dart';
-import 'package:face_transfer/data/swap_gender_baidu_response.dart';
-import 'package:face_transfer/data/swap_gender_entity.dart'
-    as tencentSwapGenderDTO;
+import 'package:face_transfer/generated/json/base/json_convert_content.dart';
 import 'package:face_transfer/net/HttpManager.dart';
-import 'package:face_transfer/net/PublicArgs.dart';
+import 'package:face_transfer/data/edit_face_response_entity.dart';
 
 class Api {
-  static Future<tencentSwapGenderDTO.SwapGenderEntity> swapGenderByTencent(
-      String imgBase64,
-      {String resImgType = 'base64'}) async {
-    var header = PublicArgs("SwapGenderPic", "ap-shanghai", "2020-03-04",
-            DateTime.now().microsecondsSinceEpoch * 1000)
-        .toMap();
+  static String? baiduToken;
 
-    var data = {
-      "Image": imgBase64,
-      "RspImgType": resImgType,
-      "GenderInfos": [
-        {"Gender": 0}
-      ]
-    };
-    header["Image"] = imgBase64;
-    header["RspImgType"] = resImgType;
-    var response = await HttpManager().http.post(
-        "https://ft.tencentcloudapi.com",
-        data: data,
-        options: Options(headers: header));
-    return tencentSwapGenderDTO.SwapGenderEntity.fromJson(response.data);
-  }
-
-  static String baiduToken;
-
-  static void fetchBaiduToken() async {
+  static Future fetchBaiduToken() async {
     if (baiduToken == null) {
       var tokenParams = {
         "grant_type": "client_credentials",
@@ -54,21 +29,20 @@ class Api {
     }
   }
 
-  static ResponseResult createRemoteResponseResult(Response response) {
+  static ResponseResult<T> createRemoteResponseResult<T>(Response response) {
     if (response.statusCode == 200) {
-      SwapGenderBaiduResponse swapGenderBaiduResponse =
-          SwapGenderBaiduResponse.fromJson(response.data);
-      return ResponseResult.success(swapGenderBaiduResponse);
+      T data = JsonConvert.fromJsonAsT<T>(response.data);
+      return ResponseResult.success(data);
     } else {
       return ResponseResult.failed(
           "${response.statusCode}: ${response.statusMessage}");
     }
   }
 
-  static Future<ResponseResult<SwapGenderBaiduResponse>> swapGenderByBaidu(
+  static Future<ResponseResult<EditFaceResponseEntity>> swapGenderByBaidu(
       String imgBase64, String actionType) async {
     if (baiduToken == null) {
-      fetchBaiduToken();
+      await fetchBaiduToken();
       if (baiduToken == null) {
         return ResponseResult.failed("获取token失败");
       }

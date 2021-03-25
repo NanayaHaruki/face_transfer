@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:face_transfer/data/ResponseResult.dart';
-import 'package:face_transfer/data/swap_gender_baidu_response.dart';
-import 'package:face_transfer/data/swap_gender_entity.dart';
+import 'package:face_transfer/data/edit_face_response_entity.dart';
 import 'package:face_transfer/net/Api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as Img;
+import 'dart:io';
 
 class MyHomePage extends StatefulWidget {
   @override
@@ -15,40 +16,65 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  File _localImg;
-  Widget _image;
+  late List<int> imgData;
+  Widget? _image;
   final picker = ImagePicker();
   bool loading = false;
   int childFeatureIndex = 0;
 
-  Future getImage() async {
-    final pickedFile = await picker.getImage(source: ImageSource.gallery);
+  Future pickImageFromCamera() async {
+    final pickedFile = await picker.getImage(source: ImageSource.camera);
+    getImage(pickedFile);
+  }
 
+  Future pickImageFromGallery() async {
+    final pickedFile = await picker.getImage(source: ImageSource.gallery);
+    getImage(pickedFile);
+  }
+
+  void getImage(pickedFile) {
     setState(() {
       if (pickedFile != null) {
-        _localImg = File(pickedFile.path);
-        _image = Image.file(File(pickedFile.path));
+        var file = File(pickedFile.path);
+        _image = Image.file(file);
+        imgData = file.readAsBytesSync();
       } else {
         print('No image selected.');
       }
     });
   }
 
-  void swapGender(String actionType) async {
+  Future swapGender(String actionType) async {
     setState(() {
       loading = true;
     });
-    var imgBytes = await _localImg.readAsBytes();
-    var imgBase64 = Base64Encoder().convert(imgBytes);
-    ResponseResult<SwapGenderBaiduResponse> result =
+
+    // 百度不支持4000像素以上
+    Img.Image uploadImg = Img.decodeImage(imgData)!;
+    int width = uploadImg.width;
+    int height = uploadImg.height;
+    if (width > 4000) width = 4000;
+    if (height > 4000) height = 4000;
+
+    if (width == 4000 || height == 4000) {
+      uploadImg = Img.copyResize(uploadImg, width: width, height: height);
+    }
+    var imgBase64 = Base64Encoder().convert(Img.writePng(uploadImg));
+
+    ResponseResult<EditFaceResponseEntity> result =
         await Api.swapGenderByBaidu(imgBase64, actionType);
     setState(() {
       loading = false;
       if (result.isSuccess()) {
-        _image =
-            Image.memory(Base64Decoder().convert(result.data.result.image));
+        if (result.data?.errorCode == 0 && result.data?.result != null) {
+          var uint8list = base64Decode(result.data!.result!.image);
+          _image = Image.memory(uint8list);
+          imgData = uint8list;
+        } else {
+          _image = Text(result.data!.errorMsg);
+        }
       } else {
-        _image = Text(result.msg);
+        _image = Text(result.msg!);
       }
     });
   }
@@ -76,96 +102,101 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Face Transfer'),
-      ),
-      body: Column(
-        children: [
-          Offstage(
-            offstage: !loading,
-            child: LinearProgressIndicator(),
-          ),
-          Expanded(
-              child: Center(
-            child: _image == null
-                ? Text(
-                    '请选一张图',
-                    style: TextStyle(fontSize: 18),
-                  )
-                : _image,
-          )),
-          Offstage(
-            offstage: _image == null,
-            child: Column(
-              children: [
-                IndexedStack(
-                  index: childFeatureIndex,
-                  children: [
-                    Row(
-                      children: [
-                        TextButton.icon(
-                            onPressed: () => onGenderPress(0),
-                            icon: Image.asset(
-                              "assets/images/male.png",
-                              width: 20,
-                              height: 20,
-                            ),
-                            label: Text("男")),
-                        TextButton.icon(
-                            onPressed: () => onGenderPress(1),
-                            icon: Image.asset("assets/images/female.png",
-                                width: 20, height: 20),
-                            label: Text("女"))
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        TextButton.icon(
-                            onPressed: () => onAgePress(0),
-                            icon: Image.asset("assets/images/child.png",
-                                width: 20, height: 20),
-                            label: Text("小孩")),
-                        TextButton.icon(
-                            onPressed: () => onAgePress(1),
-                            icon: Image.asset("assets/images/oldman.png",
-                                width: 20, height: 20),
-                            label: Text("老人"))
-                      ],
-                    )
-                  ],
-                ),
-                Row(
-                  children: [
-                    TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            childFeatureIndex = 0;
-                          });
-                        },
-                        icon: Image.asset("assets/images/gender.png",
-                            width: 20, height: 20),
-                        label: Text("性别")),
-                    TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            childFeatureIndex = 1;
-                          });
-                        },
-                        icon: Image.asset("assets/images/age.png",
-                            width: 20, height: 20),
-                        label: Text("年龄"))
-                  ],
-                )
-              ],
+        appBar: AppBar(
+          title: Text('Face Transfer'),
+        ),
+        body: Column(
+          children: [
+            Offstage(
+              offstage: !loading,
+              child: LinearProgressIndicator(),
             ),
-          )
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: getImage,
-        tooltip: 'Pick Image',
-        child: Icon(Icons.add_a_photo),
-      ),
-    );
+            Expanded(
+                child: Center(
+              child: _image == null
+                  ? Text(
+                      '请选一张图',
+                      style: TextStyle(fontSize: 18),
+                    )
+                  : _image,
+            )),
+            Offstage(
+              offstage: _image == null,
+              child: Column(
+                children: [
+                  IndexedStack(
+                    index: childFeatureIndex,
+                    children: [
+                      Row(
+                        children: [
+                          TextButton.icon(
+                              onPressed: () => onGenderPress(0),
+                              icon: Image.asset(
+                                "assets/images/male.png",
+                                width: 20,
+                                height: 20,
+                              ),
+                              label: Text("男")),
+                          TextButton.icon(
+                              onPressed: () => onGenderPress(1),
+                              icon: Image.asset("assets/images/female.png",
+                                  width: 20, height: 20),
+                              label: Text("女"))
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          TextButton.icon(
+                              onPressed: () => onAgePress(0),
+                              icon: Image.asset("assets/images/child.png",
+                                  width: 20, height: 20),
+                              label: Text("小孩")),
+                          TextButton.icon(
+                              onPressed: () => onAgePress(1),
+                              icon: Image.asset("assets/images/oldman.png",
+                                  width: 20, height: 20),
+                              label: Text("老人"))
+                        ],
+                      )
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              childFeatureIndex = 0;
+                            });
+                          },
+                          icon: Image.asset("assets/images/gender.png",
+                              width: 20, height: 20),
+                          label: Text("性别")),
+                      TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              childFeatureIndex = 1;
+                            });
+                          },
+                          icon: Image.asset("assets/images/age.png",
+                              width: 20, height: 20),
+                          label: Text("年龄"))
+                    ],
+                  )
+                ],
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                    icon: Icon(Icons.add_a_photo),
+                    onPressed: pickImageFromCamera),
+                IconButton(
+                    icon: Icon(Icons.photo_album),
+                    onPressed: pickImageFromGallery)
+              ],
+            )
+          ],
+        ));
   }
 }
